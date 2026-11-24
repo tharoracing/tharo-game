@@ -283,6 +283,159 @@ document.getElementById('hud').style.cssText +=
 document.getElementById('speed').style.cssText =
 'font-size:58px;font-style:italic;color:#ffffff;font-weight:900';
 
+// THARO RACING V4 - CAR UPGRADE
+document.title = 'THARO RACING 3D V4';
+
+while(car.children.length){
+ car.remove(car.children[0]);
+}
+
+const paint = new THREE.MeshPhysicalMaterial({
+ color:0x080a10,
+ metalness:0.65,
+ roughness:0.23,
+ clearcoat:1,
+ clearcoatRoughness:0.1
+});
+
+function carPart(geometry,material,x,y,z){
+ const mesh=new THREE.Mesh(geometry,material);
+ mesh.position.set(x,y,z);
+ car.add(mesh);
+ return mesh;
+}
+
+function curvedPart(w,h,d,x,y,z,material){
+ const mesh=carPart(
+ new THREE.SphereGeometry(1,32,20),
+ material,x,y,z);
+ mesh.scale.set(w/2,h/2,d/2);
+ return mesh;
+}
+
+const glass=new THREE.MeshStandardMaterial({
+ color:0x132536,
+ metalness:0.4,
+ roughness:0.12
+});
+
+const rubber=new THREE.MeshStandardMaterial({
+ color:0x090909,roughness:0.95
+});
+
+const chrome=new THREE.MeshStandardMaterial({
+ color:0xbfc5cc,
+ metalness:0.8,roughness:0.25
+});
+
+// Curved sports car body
+curvedPart(2.08,0.82,4.65,0,0.65,0,paint);
+curvedPart(1.95,0.55,1.85,0,0.88,-1.1,paint);
+curvedPart(1.96,0.65,1.55,0,0.83,1.35,paint);
+curvedPart(1.65,0.87,2.05,0,1.05,0,glass);
+curvedPart(1.46,0.25,1.35,0,1.48,-0.1,paint);
+
+// Wheels and alloy rims
+for(const side of [-1,1]){
+ for(const z of [-1.38,1.38]){
+ const tyre=carPart(
+ new THREE.CylinderGeometry(.43,.43,.36,40),
+ rubber,side*.96,.44,z);
+ tyre.rotation.z=Math.PI/2;
+
+ const rim=carPart(
+ new THREE.CylinderGeometry(.28,.28,.04,32),
+ chrome,side*1.155,.44,z);
+ rim.rotation.z=Math.PI/2;
+
+ for(let i=0;i<6;i++){
+ const a=i*Math.PI/3;
+ const spoke=carPart(
+ new THREE.BoxGeometry(.045,.24,.045),
+ rubber,side*1.18,
+ .44+Math.cos(a)*.14,
+ z+Math.sin(a)*.14);
+ spoke.rotation.x=a;
+ }
+ }
+}
+
+// Rear bumper
+const bumper=box(1.76,.36,.25,0x101014,
+0,.57,2.01,car);
+bumper.material=paint;
+
+// Four round red tail lights
+const redLight=new THREE.MeshStandardMaterial({
+ color:0xff0808,
+ emissive:0xff0000,
+ emissiveIntensity:1.8
+});
+
+for(const x of [-.72,-.43,.43,.72]){
+ const light=carPart(
+ new THREE.CylinderGeometry(.125,.125,.07,32),
+ redLight,x,.79,2.14);
+ light.rotation.x=Math.PI/2;
+}
+
+// Rear spoiler
+for(const x of [-.68,.68]){
+ box(.12,.38,.18,0x080808,x,1.15,1.65,car);
+}
+box(1.98,.10,.48,0x080808,0,1.38,1.65,car);
+
+// Side mirrors
+for(const x of [-1,1]){
+ curvedPart(.35,.17,.28,x,.99,-.63,paint);
+}
+
+// Dual exhausts
+for(const x of [-.65,.65]){
+ const pipe=carPart(
+ new THREE.CylinderGeometry(.105,.105,.25,24),
+ chrome,x,.39,2.02);
+ pipe.rotation.x=Math.PI/2;
+}
+
+// THARO number plate
+const plateCanvas=document.createElement('canvas');
+plateCanvas.width=256;
+plateCanvas.height=64;
+const pc=plateCanvas.getContext('2d');
+pc.fillStyle='#eeeeee';
+pc.fillRect(0,0,256,64);
+pc.fillStyle='#111111';
+pc.font='bold 42px Arial';
+pc.textAlign='center';
+pc.fillText('THARO',128,47);
+
+carPart(new THREE.PlaneGeometry(.52,.13),
+new THREE.MeshBasicMaterial({
+ map:new THREE.CanvasTexture(plateCanvas)
+}),0,.61,2.16);
+
+// Soft shadow underneath the car
+const shadowCanvas=document.createElement('canvas');
+shadowCanvas.width=shadowCanvas.height=128;
+const sc=shadowCanvas.getContext('2d');
+const gradient=sc.createRadialGradient(
+64,64,5,64,64,64);
+gradient.addColorStop(0,'rgba(0,0,0,0.85)');
+gradient.addColorStop(1,'rgba(0,0,0,0)');
+sc.fillStyle=gradient;
+sc.fillRect(0,0,128,128);
+
+const carShadow=carPart(
+new THREE.PlaneGeometry(3.1,5.7),
+new THREE.MeshBasicMaterial({
+ map:new THREE.CanvasTexture(shadowCanvas),
+ transparent:true,
+ depthWrite:false
+}),0,.09,0);
+
+carShadow.rotation.x=-Math.PI/2;
+
 </script>
 </body>
 </html>
