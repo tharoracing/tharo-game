@@ -208,6 +208,81 @@ addEventListener('resize',()=>{
  camera.updateProjectionMatrix();
  renderer.setSize(innerWidth,innerHeight);
 });
+
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+sun.intensity = 1.5;
+
+function roadTexture(){
+ const c = document.createElement('canvas');
+ c.width = c.height = 512;
+ const ctx = c.getContext('2d');
+ ctx.fillStyle = '#34363a';
+ ctx.fillRect(0,0,512,512);
+ for(let i=0;i<45000;i++){
+ const v = 35 + Math.floor(Math.random()*65);
+ ctx.fillStyle = `rgb(${v},${v},${v})`;
+ ctx.fillRect(Math.random()*512,Math.random()*512,2,2);
+ }
+ const t = new THREE.CanvasTexture(c);
+ t.wrapS = t.wrapT = THREE.RepeatWrapping;
+ t.repeat.set(4,400);
+ t.encoding = THREE.sRGBEncoding;
+ return t;
+}
+
+const asphalt = roadTexture();
+
+scene.traverse(o=>{
+ if(o.isMesh && o.geometry.type === 'BoxGeometry'){
+ const p = o.geometry.parameters;
+ if(p.width===16 && p.depth===1600){
+ o.material.map = asphalt;
+ o.material.color.set(0xffffff);
+ o.material.roughness = 1;
+ o.material.needsUpdate = true;
+ }
+ }
+});
+
+function windowTexture(){
+ const c = document.createElement('canvas');
+ c.width = 256;
+ c.height = 512;
+ const ctx = c.getContext('2d');
+ ctx.fillStyle = '#626c76';
+ ctx.fillRect(0,0,256,512);
+ for(let y=8;y<512;y+=32){
+ for(let x=8;x<256;x+=32){
+ ctx.fillStyle = Math.random()>.85 ? '#dec795' : '#263d50';
+ ctx.fillRect(x,y,23,24);
+ }}
+ const t = new THREE.CanvasTexture(c);
+ t.encoding = THREE.sRGBEncoding;
+ return t;
+}
+
+const windows = windowTexture();
+buildings.forEach(b=>{
+ b.material.map = windows;
+ b.material.color.set(0xffffff);
+ b.material.needsUpdate = true;
+});
+
+car.traverse(o=>{
+ if(o.isMesh){
+ o.material.roughness = .28;
+ }
+});
+
+document.getElementById('hud').style.cssText +=
+';background:#101820bb;padding:18px;border-radius:18px;border-left:4px solid #ff3030';
+
+document.getElementById('speed').style.cssText =
+'font-size:58px;font-style:italic;color:#ffffff;font-weight:900';
+
 </script>
 </body>
 </html>
