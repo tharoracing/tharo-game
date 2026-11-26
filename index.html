@@ -35,7 +35,7 @@ button{background:#161616bb;color:white;border:1px solid #ffffff66;border-radius
 <button onclick="startGame()">START RACING</button>
 <p>WASD / Arrow Keys / Space for Nitro</p>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x9bbcd4);
@@ -435,7 +435,26 @@ new THREE.MeshBasicMaterial({
 }),0,.09,0);
 
 carShadow.rotation.x=-Math.PI/2;
+const loader = new THREE.GLTFLoader();
 
+loader.load('./drag-coupe.glb', function(gltf) {
+    const model = gltf.scene;
+
+    model.rotation.y = Math.PI;
+    model.scale.setScalar(0.85);
+
+    car.children.slice().forEach(function(child) {
+        if (child !== carShadow) {
+            child.visible = false;
+        }
+    });
+
+    car.add(model);
+
+    console.log('Black car loaded');
+}, undefined, function(error) {
+    console.error(error);
+});
 </script>
 </body>
 </html>
