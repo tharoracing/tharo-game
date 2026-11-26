@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>THARO RACING 3D V5</title>
+<title>THARO RACING 3D V6</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial;touch-action:none}
@@ -125,6 +125,7 @@ for(let i=0;i<13;i++){
 let speed=0,distance=0,nitro=100,running=false;
 const keys={};
 let audio,engine,volume,engine2,filter,boostGain,boostOsc;
+let shake=0, hitCooldown=0;
 let countdown=0,elapsed=0,finished=false,playerPlace=4; const raceLength=2000;
 const rivals=[0,1,2].map((i)=>({mesh:traffic[i],distance:5+i*5,velocity:47+i*4,lane:[-6,2,6][i],finish:null}));
 function beep(freq,duration=.18){if(!audio)return;const o=audio.createOscillator(),g=audio.createGain();o.frequency.value=freq;g.gain.setValueAtTime(.09,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+duration);}
@@ -133,9 +134,9 @@ function endRace(title){running=false;finished=true;document.querySelector('#sta
 function startGame(){
  document.getElementById('start').style.display='none';
  running=true;
- speed=0;distance=0;nitro=100;elapsed=0;finished=false;countdown=3;playerPlace=4; rivals.forEach((r,i)=>{r.distance=5+i*5;r.finish=null;r.mesh.position.set(r.lane,0,-r.distance);}); document.getElementById('countdown').style.display='flex';
+ shake=0;hitCooldown=0;speed=0;distance=0;nitro=100;elapsed=0;finished=false;countdown=3;playerPlace=4; rivals.forEach((r,i)=>{r.distance=5+i*5;r.finish=null;r.mesh.position.set(r.lane,0,-r.distance);}); document.getElementById('countdown').style.display='flex';
  car.position.x=0;
- traffic.forEach((t,i)=>{if(i>=3)t.position.z=-45-i*33;});
+ traffic.forEach((t,i)=>{if(i>=3)t.position.set([-6,-2,2,6][i%4],0,-45-i*33);});
  if(!audio){
  try{
  audio=new (window.AudioContext||window.webkitAudioContext)();
@@ -182,23 +183,43 @@ function animate(){
  car.position.x=Math.max(-6.8,Math.min(6.8,car.position.x));
  car.rotation.z+=(-steer*.045-car.rotation.z)*Math.min(1,dt*8);
  car.rotation.y+=(-steer*.08-car.rotation.y)*Math.min(1,dt*8);
- const move=speed/3.6*dt;
+ const oldDistance=distance; const move=speed/3.6*dt; hitCooldown=Math.max(0,hitCooldown-dt);
  distance+=move; asphalt.offset.y-=move/4; scenery.forEach(m=>{m.position.z+=move;if(m.position.z>35)m.position.z-=720}); finishGate.position.z=distance-raceLength;
- rivals.forEach((r,i)=>{if(r.finish===null){r.distance+=Math.max(0,r.velocity+Math.sin(elapsed*.7+i)*4)*dt;if(r.distance>=raceLength)r.finish=elapsed;}r.mesh.position.z=distance-r.distance;});playerPlace=1+rivals.filter(r=>r.finish!==null||r.distance>distance).length;
+ rivals.forEach(r=>{r.mesh.position.z=distance-r.distance;});
+ const laneClear=(t,x,z,gap=12)=>[car,...traffic].every(o=>o===t||Math.abs(o.position.x-x)>2.2||Math.abs(o.position.z-z)>gap);
+ rivals.forEach((r,i)=>{
+ if(r.finish!==null){r.mesh.position.z=distance-r.distance;return;}
+ const t=r.mesh; let v=r.velocity+Math.sin(elapsed*.7+i)*4;
+ const ahead=[car,...traffic].filter(o=>o!==t&&Math.abs(o.position.x-t.position.x)<2.2&&o.position.z<t.position.z&&t.position.z-o.position.z<16);
+ if(ahead.length){const next=[-6,-2,2,6].filter(x=>Math.abs(x-t.position.x)>2&&laneClear(t,x,t.position.z,15)).sort((a,b)=>Math.abs(a-t.position.x)-Math.abs(b-t.position.x))[0];if(next!==undefined)r.lane=next;v*=.55;}
+ const nx=t.position.x+Math.sign(r.lane-t.position.x)*Math.min(Math.abs(r.lane-t.position.x),dt*4);
+ if(laneClear(t,nx,t.position.z,5.4))t.position.x=nx;
+ let advance=Math.max(0,v)*dt;
+ for(const o of [car,...traffic])if(o!==t&&Math.abs(o.position.x-t.position.x)<2.1&&o.position.z<=t.position.z)advance=Math.min(advance,Math.max(0,t.position.z-o.position.z-5.2));
+ r.distance+=advance;t.position.z=distance-r.distance;if(r.distance>=raceLength)r.finish=elapsed;
+ });playerPlace=1+rivals.filter(r=>r.finish!==null||r.distance>distance).length;
  document.getElementById('raceinfo').textContent='POSITION: '+playerPlace+' / 4 · '+elapsed.toFixed(1)+'s';document.querySelector('#progress i').style.width=Math.min(100,distance/raceLength*100)+'%';
  markings.forEach(m=>{m.position.z+=move;if(m.position.z>30)m.position.z-=1200});
  buildings.forEach(m=>{m.position.z+=move;if(m.position.z>50)m.position.z-=1260});
  traffic.forEach((t,i)=>{
- if(i<3)return; if(!running)return; t.position.z+=(speed/3.6-12-i%5)*dt;
- if(t.position.z>30){
- t.position.z=-400-Math.random()*120;
- t.position.x=[-6,-2,2,6][Math.floor(Math.random()*4)];
- }
- if(t.position.z<-650)t.position.z=-400;
- if(Math.abs(t.position.x-car.position.x)<1.8&&Math.abs(t.position.z)<3.8){
- speed=0;endRace('CRASH!');
- }
+ if(i<3)return;
+ let next=t.position.z+move-(12+i%5)*dt;
+ for(const o of [car,...traffic])if(o!==t&&Math.abs(o.position.x-t.position.x)<2.1&&o.position.z<t.position.z)next=Math.max(next,Math.min(t.position.z+move,o.position.z+5.2));
+ t.position.z=next;
+ if(t.position.z>35||t.position.z<-650){let z=-400-i*22;while(!laneClear(t,t.position.x,z,12))z-=13;t.position.z=z;}
  });
+ for(const t of traffic){
+ if(Math.abs(t.position.x-car.position.x)<1.95&&Math.abs(t.position.z-car.position.z)<4.8){
+ const dz=t.position.z-car.position.z;const dx=car.position.x-t.position.x;
+ if(Math.abs(dx)>.65){car.position.x=Math.max(-6.8,Math.min(6.8,t.position.x+Math.sign(dx)*2.02));}
+ if(Math.abs(t.position.x-car.position.x)<1.95){t.position.z=car.position.z+(dz<=0?-5.25:5.25);const r=rivals.find(r=>r.mesh===t);if(r)r.distance=distance-t.position.z;}
+ if(hitCooldown===0){speed*=.48;hitCooldown=.65;shake=.32;beep(65,.22);}
+ }
+ }
+ // Resolve AI-to-AI overlap, preserving the leading vehicle.
+ for(let pass=0;pass<3;pass++)for(let i=0;i<traffic.length;i++)for(let j=i+1;j<traffic.length;j++){
+ const a=traffic[i],b=traffic[j];if(Math.abs(a.position.x-b.position.x)<2.05&&Math.abs(a.position.z-b.position.z)<5.2){const rear=a.position.z>b.position.z?a:b;const front=rear===a?b:a;rear.position.z=front.position.z+5.25;const r=rivals.find(r=>r.mesh===rear);if(r)r.distance=distance-rear.position.z;}}
+
  if(running&&distance>=raceLength)endRace(playerPlace===1?'VICTORY!':'RACE COMPLETE');
  document.getElementById('speed').textContent=Math.round(speed);
  document.getElementById('score').textContent='Distance: '+Math.floor(distance)+' m';
@@ -206,7 +227,7 @@ function animate(){
  }
  if(engine){const rpm=35+(speed%55)*1.7+speed*.18;engine.frequency.setTargetAtTime(rpm,audio.currentTime,.08);engine2.frequency.setTargetAtTime(rpm*.5,audio.currentTime,.08);filter.frequency.setTargetAtTime(110+speed*4,audio.currentTime,.1);volume.gain.setTargetAtTime(running?.045+((keys.ArrowUp||keys.KeyW) ? .045 : 0):.001,audio.currentTime,.1);boostGain.gain.setTargetAtTime(running&&keys.Space&&nitro>0?.025:0,audio.currentTime,.1);}
  camera.position.x+=(car.position.x-camera.position.x)*.07;
- camera.position.y=4.6;
+ shake=Math.max(0,shake-dt); camera.position.y=4.6+Math.sin(elapsed*93)*shake*.45;
  camera.position.z=8.5;
  camera.lookAt(car.position.x*.8,.8,-10);
  renderer.render(scene,camera);
@@ -295,7 +316,7 @@ document.getElementById('speed').style.cssText =
 'font-size:58px;font-style:italic;color:#ffffff;font-weight:900';
 
 // THARO RACING V4 - CAR UPGRADE
-document.title = 'THARO RACING 3D V5';
+document.title = 'THARO RACING 3D V6';
 
 while(car.children.length){
  car.remove(car.children[0]);
@@ -462,6 +483,13 @@ loader.load('./drag-coupe.glb', function(gltf) {
 
     car.add(model);
 
+    // Reuse the same detailed geometry; tint body-like materials on opponent copies.
+    const colors=[0xb52126,0xd7d9df,0x235cb8,0x70737a,0xd69729];
+    traffic.forEach((t,i)=>{
+      const copy=model.clone(true);
+      copy.traverse(o=>{if(!o.isMesh)return;const tint=m=>{const c=m.clone();if(c.color&&c.metalness>.35&&!/glass|wheel|tire|tyre|rim|chrome|light|rubber/i.test(c.name||'')){c.color.set(colors[i%colors.length]);}return c;};o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material);});
+      t.children.forEach(o=>o.visible=false);t.add(copy);
+    });
     console.log('Black car loaded');
 }, undefined, function(error) {
     console.error("Black car model failed to load",error);
