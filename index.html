@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>THARO RACING 3D V2</title>
+<title>THARO RACING 3D V5</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial;touch-action:none}
@@ -16,6 +16,7 @@ button{background:#161616bb;color:white;border:1px solid #ffffff66;border-radius
 #start{position:absolute;inset:0;background:#07101bdc;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 #start h1{font-size:40px;font-style:italic}
 #start button{background:#e53935}
+#hud{z-index:2;min-width:165px} #controls,#start{z-index:3} #start{background:linear-gradient(135deg,#080b13ee,#321b23dd)} #start h1{font-size:clamp(32px,7vw,76px);letter-spacing:3px;margin:12px} #raceinfo{margin-top:10px;font-size:14px;line-height:1.6} #progress{height:5px;background:#ffffff33;border-radius:5px;margin-top:8px} #progress i{display:block;height:100%;background:#ff493b;width:0%} #countdown{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:90px;font-weight:900;pointer-events:none;z-index:4;text-shadow:0 4px 20px #000} @media(max-width:600px){button{padding:13px;font-size:16px} #hud{top:10px;left:10px} #controls{bottom:12px}}
 </style>
 </head>
 <body>
@@ -23,15 +24,15 @@ button{background:#161616bb;color:white;border:1px solid #ffffff66;border-radius
 <b>THARO RACING 3D</b>
 <div id="speed">0</div> KM/H
 <div id="score">Distance: 0 m</div>
-<div id="boost">NITRO: 100%</div>
+<div id="boost">NITRO: 100%</div><div id="raceinfo">POSITION: 1 / 4</div><div id="progress"><i></i></div>
 </div>
 <div id="controls">
 <div><button id="left">◀</button> <button id="right">▶</button></div>
 <div><button id="nitro">N₂O</button> <button id="brake">BRAKE</button> <button id="gas">▲</button></div>
 </div>
-<div id="start">
+<div id="countdown"></div><div id="start">
 <h1>THARO RACING</h1>
-<p>HIGHWAY 3D — BLACK EDITION</p>
+<p>HIGHWAY 3D — PERFORMANCE EDITION · 2 KM RACE</p>
 <button onclick="startGame()">START RACING</button>
 <p>WASD / Arrow Keys / Space for Nitro</p>
 </div>
@@ -42,8 +43,12 @@ scene.background=new THREE.Color(0x9bbcd4);
 scene.fog=new THREE.Fog(0x9bbcd4,80,550);
 const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,1000);
 const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+function fullHD(){
+ const ratio=Math.sqrt((1920*1080)/(innerWidth*innerHeight));
+ renderer.setPixelRatio(ratio);
+ renderer.setSize(innerWidth,innerHeight);
+}
+fullHD();
 document.body.prepend(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffffff,0x555555,1.7));
 const sun=new THREE.DirectionalLight(0xffe4bd,2);
@@ -119,21 +124,24 @@ for(let i=0;i<13;i++){
 
 let speed=0,distance=0,nitro=100,running=false;
 const keys={};
-let audio,engine,volume;
+let audio,engine,volume,engine2,filter,boostGain,boostOsc;
+let countdown=0,elapsed=0,finished=false,playerPlace=4; const raceLength=2000;
+const rivals=[0,1,2].map((i)=>({mesh:traffic[i],distance:5+i*5,velocity:47+i*4,lane:[-6,2,6][i],finish:null}));
+function beep(freq,duration=.18){if(!audio)return;const o=audio.createOscillator(),g=audio.createGain();o.frequency.value=freq;g.gain.setValueAtTime(.09,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+duration);}
+function endRace(title){running=false;finished=true;document.querySelector('#start h1').textContent=title;document.querySelector('#start p').textContent='Position '+playerPlace+' / 4 · '+Math.floor(distance)+' m · '+elapsed.toFixed(1)+' s';document.querySelector('#start button').textContent='RACE AGAIN';document.getElementById('start').style.display='flex';beep(title==='CRASH!'?80:650,.4);}
+
 function startGame(){
  document.getElementById('start').style.display='none';
  running=true;
- speed=25;distance=0;nitro=100;
+ speed=0;distance=0;nitro=100;elapsed=0;finished=false;countdown=3;playerPlace=4; rivals.forEach((r,i)=>{r.distance=5+i*5;r.finish=null;r.mesh.position.set(r.lane,0,-r.distance);}); document.getElementById('countdown').style.display='flex';
  car.position.x=0;
- traffic.forEach((t,i)=>t.position.z=-45-i*33);
+ traffic.forEach((t,i)=>{if(i>=3)t.position.z=-45-i*33;});
  if(!audio){
  try{
  audio=new (window.AudioContext||window.webkitAudioContext)();
  engine=audio.createOscillator();
  volume=audio.createGain();
- engine.type='sawtooth';
- volume.gain.value=.025;
- engine.connect(volume);
+ engine.type='sawtooth'; engine2=audio.createOscillator();engine2.type='triangle';filter=audio.createBiquadFilter();filter.type='lowpass';filter.frequency.value=220;filter.Q.value=1.1;volume.gain.value=.001;engine.connect(filter);engine2.connect(filter);filter.connect(volume);engine2.start();boostOsc=audio.createOscillator();boostOsc.type='triangle';boostOsc.frequency.value=130;boostGain=audio.createGain();boostGain.gain.value=0;boostOsc.connect(boostGain);boostGain.connect(audio.destination);boostOsc.start();
  volume.connect(audio.destination);
  engine.start();
  }catch(e){}
@@ -161,7 +169,8 @@ let clock=new THREE.Clock();
 function animate(){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
- if(running){
+ if(running && countdown>0){const prev=Math.ceil(countdown);countdown=Math.max(0,countdown-dt);document.getElementById('countdown').textContent=countdown>0?Math.ceil(countdown):'GO!';if(Math.ceil(countdown)!==prev)beep(countdown>0?440:880);if(countdown===0)setTimeout(()=>{if(countdown===0)document.getElementById('countdown').style.display='none'},500);}
+ if(running && countdown===0){elapsed+=dt;
  const boost=keys.Space&&nitro>0;
  if(keys.ArrowUp||keys.KeyW||boost)speed+=65*dt;
  else speed-=8*dt;
@@ -169,44 +178,44 @@ function animate(){
  speed=Math.max(0,Math.min(boost?300:220,speed));
  nitro=Math.max(0,Math.min(100,nitro+(boost?-22:5)*dt));
  let steer=(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0);
- car.position.x+=steer*dt*(2+speed*.025);
+ car.position.x+=steer*dt*(speed>1?1.8+speed*.023:0);
  car.position.x=Math.max(-6.8,Math.min(6.8,car.position.x));
- car.rotation.z=-steer*.045;
- car.rotation.y=-steer*.08;
+ car.rotation.z+=(-steer*.045-car.rotation.z)*Math.min(1,dt*8);
+ car.rotation.y+=(-steer*.08-car.rotation.y)*Math.min(1,dt*8);
  const move=speed/3.6*dt;
- distance+=move;
+ distance+=move; asphalt.offset.y-=move/4; scenery.forEach(m=>{m.position.z+=move;if(m.position.z>35)m.position.z-=720}); finishGate.position.z=distance-raceLength;
+ rivals.forEach((r,i)=>{if(r.finish===null){r.distance+=Math.max(0,r.velocity+Math.sin(elapsed*.7+i)*4)*dt;if(r.distance>=raceLength)r.finish=elapsed;}r.mesh.position.z=distance-r.distance;});playerPlace=1+rivals.filter(r=>r.finish!==null||r.distance>distance).length;
+ document.getElementById('raceinfo').textContent='POSITION: '+playerPlace+' / 4 · '+elapsed.toFixed(1)+'s';document.querySelector('#progress i').style.width=Math.min(100,distance/raceLength*100)+'%';
  markings.forEach(m=>{m.position.z+=move;if(m.position.z>30)m.position.z-=1200});
  buildings.forEach(m=>{m.position.z+=move;if(m.position.z>50)m.position.z-=1260});
  traffic.forEach((t,i)=>{
- t.position.z+=(speed/3.6-12-i%5)*dt;
+ if(i<3)return; if(!running)return; t.position.z+=(speed/3.6-12-i%5)*dt;
  if(t.position.z>30){
  t.position.z=-400-Math.random()*120;
  t.position.x=[-6,-2,2,6][Math.floor(Math.random()*4)];
  }
  if(t.position.z<-650)t.position.z=-400;
  if(Math.abs(t.position.x-car.position.x)<1.8&&Math.abs(t.position.z)<3.8){
- speed=0;running=false;
- document.querySelector('#start h1').textContent='CRASH!';
- document.querySelector('#start button').textContent='RESTART';
- document.getElementById('start').style.display='flex';
+ speed=0;endRace('CRASH!');
  }
  });
+ if(running&&distance>=raceLength)endRace(playerPlace===1?'VICTORY!':'RACE COMPLETE');
  document.getElementById('speed').textContent=Math.round(speed);
  document.getElementById('score').textContent='Distance: '+Math.floor(distance)+' m';
  document.getElementById('boost').textContent='NITRO: '+Math.floor(nitro)+'%';
  }
- if(engine)engine.frequency.value=45+speed*.65;
+ if(engine){const rpm=35+(speed%55)*1.7+speed*.18;engine.frequency.setTargetAtTime(rpm,audio.currentTime,.08);engine2.frequency.setTargetAtTime(rpm*.5,audio.currentTime,.08);filter.frequency.setTargetAtTime(110+speed*4,audio.currentTime,.1);volume.gain.setTargetAtTime(running?.045+((keys.ArrowUp||keys.KeyW) ? .045 : 0):.001,audio.currentTime,.1);boostGain.gain.setTargetAtTime(running&&keys.Space&&nitro>0?.025:0,audio.currentTime,.1);}
  camera.position.x+=(car.position.x-camera.position.x)*.07;
  camera.position.y=4.6;
  camera.position.z=8.5;
  camera.lookAt(car.position.x*.8,.8,-10);
  renderer.render(scene,camera);
 }
-animate();
+// Animation starts after assets and scenery are initialized.
 addEventListener('resize',()=>{
  camera.aspect=innerWidth/innerHeight;
  camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
+ fullHD();
 });
 
 renderer.outputEncoding = THREE.sRGBEncoding;
@@ -217,19 +226,20 @@ sun.intensity = 1.5;
 
 function roadTexture(){
  const c = document.createElement('canvas');
- c.width = c.height = 512;
+ c.width = c.height = 1024;
  const ctx = c.getContext('2d');
  ctx.fillStyle = '#34363a';
- ctx.fillRect(0,0,512,512);
- for(let i=0;i<45000;i++){
+ ctx.fillRect(0,0,1024,1024);
+ for(let i=0;i<180000;i++){
  const v = 35 + Math.floor(Math.random()*65);
  ctx.fillStyle = `rgb(${v},${v},${v})`;
- ctx.fillRect(Math.random()*512,Math.random()*512,2,2);
+ ctx.fillRect(Math.random()*1024,Math.random()*1024,2,2);
  }
  const t = new THREE.CanvasTexture(c);
  t.wrapS = t.wrapT = THREE.RepeatWrapping;
  t.repeat.set(4,400);
  t.encoding = THREE.sRGBEncoding;
+ t.anisotropy = Math.min(16,renderer.capabilities.getMaxAnisotropy());
  return t;
 }
 
@@ -261,6 +271,7 @@ function windowTexture(){
  }}
  const t = new THREE.CanvasTexture(c);
  t.encoding = THREE.sRGBEncoding;
+ t.anisotropy = Math.min(16,renderer.capabilities.getMaxAnisotropy());
  return t;
 }
 
@@ -284,7 +295,7 @@ document.getElementById('speed').style.cssText =
 'font-size:58px;font-style:italic;color:#ffffff;font-weight:900';
 
 // THARO RACING V4 - CAR UPGRADE
-document.title = 'THARO RACING 3D V4';
+document.title = 'THARO RACING 3D V5';
 
 while(car.children.length){
  car.remove(car.children[0]);
@@ -453,8 +464,19 @@ loader.load('./drag-coupe.glb', function(gltf) {
 
     console.log('Black car loaded');
 }, undefined, function(error) {
-    console.error(error);
+    console.error("Black car model failed to load",error);
+ document.getElementById("score").textContent="Car model unavailable";
 });
+
+scene.background=new THREE.Color(0xc28e83);scene.fog=new THREE.FogExp2(0xc28e83,.006);sun.color.set(0xffbb83);sun.position.set(-55,22,-60);
+const scenery=[];const poleMat=new THREE.MeshStandardMaterial({color:0x34373b});const leafMat=new THREE.MeshStandardMaterial({color:0x344f36});const trunkMat=new THREE.MeshStandardMaterial({color:0x59402d});const lampMat=new THREE.MeshBasicMaterial({color:0xffe1a0});
+function part(g,geo,mat,x,y,z){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);g.add(m);return m;}
+for(let i=0;i<30;i++){for(const side of [-1,1]){const g=new THREE.Group();g.position.set(side*9.6,0,-i*24);scene.add(g);scenery.push(g);part(g,new THREE.CylinderGeometry(.065,.10,5.5,8),poleMat,0,2.75,0);part(g,new THREE.BoxGeometry(1.2,.09,.12),poleMat,-side*.55,5.5,0);part(g,new THREE.BoxGeometry(.65,.10,.31),lampMat,-side*1.1,5.42,0);const t=new THREE.Group();t.position.set(side*12,0,-i*24-12);scene.add(t);scenery.push(t);part(t,new THREE.CylinderGeometry(.13,.23,2.1,7),trunkMat,0,1.05,0);part(t,new THREE.IcosahedronGeometry(1.35,1),leafMat,0,2.8,0);}}
+for(const side of [-1,1]){box(2.6,.18,1600,0x65626a,side*9.4,.04,-400);box(.18,.28,1600,0xb9b4ac,side*8.1,.12,-400);}
+buildings.forEach((b,i)=>{b.material.color.set([0xb6b2b7,0xa9bbc6,0x969096,0xc5b4a8][i%4]);b.scale.x=.7+(i%5)*.16;});
+const finishGate=new THREE.Group();scene.add(finishGate);for(const x of [-8.5,8.5])box(.35,6,.35,0x27272c,x,3,0,finishGate);box(17,.85,.3,0x22252b,0,6,0,finishGate);for(let i=0;i<24;i++)for(let j=0;j<2;j++)box(.65,.35,.02,(i+j)%2?0xffffff:0x111111,-7.5+i*.65,5.8+j*.35,.17,finishGate);finishGate.position.z=-raceLength;
+// Keep downloaded car model and fallback, as in original.
+animate();
 </script>
 </body>
 </html>
