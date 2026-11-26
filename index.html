@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>THARO RACING 3D V7</title>
+<title>THARO RACING 3D V7.1</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial;touch-action:none}
@@ -230,8 +230,8 @@ addEventListener('resize',()=>{
  fullHD();
 });
 
-renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputEncoding = THREE.LinearEncoding;
+renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.05;
 
 sun.intensity = 1.5;
@@ -307,7 +307,7 @@ document.getElementById('speed').style.cssText =
 'font-size:58px;font-style:italic;color:#ffffff;font-weight:900';
 
 // THARO RACING V4 - CAR UPGRADE
-document.title = 'THARO RACING 3D V7';
+document.title = 'THARO RACING 3D V7.1';
 
 while(car.children.length){
  car.remove(car.children[0]);
@@ -495,10 +495,11 @@ for(let i=0;i<30;i++){for(const side of [-1,1]){const g=new THREE.Group();g.posi
 for(const side of [-1,1]){box(2.6,.18,5200,0x65626a,side*9.4,.04,-2200);box(.18,.28,5200,0xb9b4ac,side*8.1,.12,-2200);}
 buildings.forEach((b,i)=>{b.material.color.set([0xb6b2b7,0xa9bbc6,0x969096,0xc5b4a8][i%4]);b.scale.x=.7+(i%5)*.16;});
 const finishGate=new THREE.Group();scene.add(finishGate);for(const x of [-8.5,8.5])box(.35,6,.35,0x27272c,x,3,0,finishGate);box(17,.85,.3,0x22252b,0,6,0,finishGate);for(let i=0;i<24;i++)for(let j=0;j<2;j++)box(.65,.35,.02,(i+j)%2?0xffffff:0x111111,-7.5+i*.65,5.8+j*.35,.17,finishGate);finishGate.position.z=-raceLength;
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-24,right:24,top:35,bottom:-35,near:1,far:100});sun.shadow.bias=-.0004;sun.shadow.normalBias=.035;
+renderer.shadowMap.enabled=false;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+sun.castShadow=false;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-24,right:24,top:35,bottom:-35,near:1,far:100});sun.shadow.bias=-.0004;sun.shadow.normalBias=.035;
 scene.traverse(o=>{if(o.isMesh){o.receiveShadow=true;if(o.geometry.parameters?.height>1)o.castShadow=true;}});
-const sky=new THREE.Scene();const skyGeo=new THREE.SphereGeometry(30,32,16);const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,vertexShader:`varying vec3 v;void main(){v=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`varying vec3 v;void main(){float h=normalize(v).y;vec3 c=mix(vec3(.85,.91,.98),vec3(.18,.39,.68),smoothstep(0.,.9,h));if(h<0.)c=vec3(.23,.27,.28);gl_FragColor=vec4(c,1.);}`});sky.add(new THREE.Mesh(skyGeo,skyMat));const pmrem=new THREE.PMREMGenerator(renderer);scene.environment=pmrem.fromScene(sky,.08).texture;pmrem.dispose();
+scene.environment=null;
+scene.add(new THREE.AmbientLight(0xffffff,0.65));
 animate();
 </script>
 </body>
