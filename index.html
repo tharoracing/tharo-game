@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>THARO RACING 3D V6</title>
+<title>THARO RACING 3D V7</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial;touch-action:none}
@@ -32,7 +32,7 @@ button{background:#161616bb;color:white;border:1px solid #ffffff66;border-radius
 </div>
 <div id="countdown"></div><div id="start">
 <h1>THARO RACING</h1>
-<p>HIGHWAY 3D — PERFORMANCE EDITION · 2 KM RACE</p>
+<p>HIGHWAY 3D — ULTRA PRO MAX · 2 KM RACE</p>
 <button onclick="startGame()">START RACING</button>
 <p>WASD / Arrow Keys / Space for Nitro</p>
 </div>
@@ -44,7 +44,7 @@ scene.fog=new THREE.Fog(0x9bbcd4,80,550);
 const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,1000);
 const renderer=new THREE.WebGLRenderer({antialias:true});
 function fullHD(){
- const ratio=Math.sqrt((1920*1080)/(innerWidth*innerHeight));
+ const ratio=Math.min(renderer.capabilities.maxTextureSize/Math.max(innerWidth,innerHeight),Math.max(1,devicePixelRatio,1920/innerWidth,1080/innerHeight));
  renderer.setPixelRatio(ratio);
  renderer.setSize(innerWidth,innerHeight);
 }
@@ -63,8 +63,8 @@ function box(w,h,d,color,x,y,z,parent=scene){
  return o;
 }
 
-box(200,.2,1600,0x65784a,0,-.2,-400);
-box(16,.1,1600,0x303238,0,0,-400);
+box(200,.2,5200,0x65784a,0,-.2,-2200);
+box(16,.1,5200,0x303238,0,0,-2200);
 
 const markings=[];
 for(let i=0;i<100;i++){
@@ -73,7 +73,7 @@ for(let i=0;i<100;i++){
  }
 }
 for(const x of [-8,8]){
- box(.18,.05,1600,0xffffff,x,.08,-400);
+ box(.18,.05,5200,0xffffff,x,.08,-2200);
 }
 
 const buildings=[];
@@ -135,7 +135,7 @@ function startGame(){
  document.getElementById('start').style.display='none';
  running=true;
  shake=0;hitCooldown=0;speed=0;distance=0;nitro=100;elapsed=0;finished=false;countdown=3;playerPlace=4; rivals.forEach((r,i)=>{r.distance=5+i*5;r.finish=null;r.mesh.position.set(r.lane,0,-r.distance);}); document.getElementById('countdown').style.display='flex';
- car.position.x=0;
+ car.position.x=0; resetPhysics();
  traffic.forEach((t,i)=>{if(i>=3)t.position.set([-6,-2,2,6][i%4],0,-45-i*33);});
  if(!audio){
  try{
@@ -166,6 +166,13 @@ for(const [id,key] of Object.entries({
  b.onpointerup=b.onpointercancel=b.onlostpointercapture=()=>keys[key]=false;
 }
 
+const lanes=[-6,-2,2,6], W=2.65,L=6.1;
+const actors=traffic.map((mesh,i)=>({mesh,x:mesh.position.x,d:45+i*33,v:0,i}));
+const player={mesh:car,x:0,d:0,v:0};
+const all=[player,...actors];
+function clearAt(a,x,d,margin=0){return all.every(b=>a===b||Math.abs(x-b.x)>=W+margin||Math.abs(d-b.d)>=L+margin);}
+function advance(a,amount){let allowed=amount;for(const b of all){if(b!==a&&Math.abs(a.x-b.x)<W&&b.d>=a.d)allowed=Math.min(allowed,Math.max(0,b.d-a.d-L));}a.d+=allowed;return allowed;}
+function resetPhysics(){player.x=player.d=0;actors.forEach((a,i)=>{a.x=lanes[i%4];a.d=i<3?10+i*10:45+i*33;a.v=0;a.goal=undefined;});}
 let clock=new THREE.Clock();
 function animate(){
  requestAnimationFrame(animate);
@@ -179,47 +186,31 @@ function animate(){
  speed=Math.max(0,Math.min(boost?300:220,speed));
  nitro=Math.max(0,Math.min(100,nitro+(boost?-22:5)*dt));
  let steer=(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0);
- car.position.x+=steer*dt*(speed>1?1.8+speed*.023:0);
- car.position.x=Math.max(-6.8,Math.min(6.8,car.position.x));
- car.rotation.z+=(-steer*.045-car.rotation.z)*Math.min(1,dt*8);
- car.rotation.y+=(-steer*.08-car.rotation.y)*Math.min(1,dt*8);
- const oldDistance=distance; const move=speed/3.6*dt; hitCooldown=Math.max(0,hitCooldown-dt);
- distance+=move; asphalt.offset.y-=move/4; scenery.forEach(m=>{m.position.z+=move;if(m.position.z>35)m.position.z-=720}); finishGate.position.z=distance-raceLength;
- rivals.forEach(r=>{r.mesh.position.z=distance-r.distance;});
- const laneClear=(t,x,z,gap=12)=>[car,...traffic].every(o=>o===t||Math.abs(o.position.x-x)>2.2||Math.abs(o.position.z-z)>gap);
- rivals.forEach((r,i)=>{
- if(r.finish!==null){r.mesh.position.z=distance-r.distance;return;}
- const t=r.mesh; let v=r.velocity+Math.sin(elapsed*.7+i)*4;
- const ahead=[car,...traffic].filter(o=>o!==t&&Math.abs(o.position.x-t.position.x)<2.2&&o.position.z<t.position.z&&t.position.z-o.position.z<16);
- if(ahead.length){const next=[-6,-2,2,6].filter(x=>Math.abs(x-t.position.x)>2&&laneClear(t,x,t.position.z,15)).sort((a,b)=>Math.abs(a-t.position.x)-Math.abs(b-t.position.x))[0];if(next!==undefined)r.lane=next;v*=.55;}
- const nx=t.position.x+Math.sign(r.lane-t.position.x)*Math.min(Math.abs(r.lane-t.position.x),dt*4);
- if(laneClear(t,nx,t.position.z,5.4))t.position.x=nx;
- let advance=Math.max(0,v)*dt;
- for(const o of [car,...traffic])if(o!==t&&Math.abs(o.position.x-t.position.x)<2.1&&o.position.z<=t.position.z)advance=Math.min(advance,Math.max(0,t.position.z-o.position.z-5.2));
- r.distance+=advance;t.position.z=distance-r.distance;if(r.distance>=raceLength)r.finish=elapsed;
- });playerPlace=1+rivals.filter(r=>r.finish!==null||r.distance>distance).length;
+ // Fixed-size substeps; axis-separated movement checks every vehicle before moving.
+ const oldDistance=distance; hitCooldown=Math.max(0,hitCooldown-dt);
+ const steps=Math.max(1,Math.ceil(dt*120)), h=dt/steps;
+ for(let step=0;step<steps;step++){
+  const nx=Math.max(-6.65,Math.min(6.65,player.x+steer*h*(speed>1?1.8+speed*.023:0)));
+  let hit=!clearAt(player,nx,player.d);if(!hit)player.x=nx;
+  const wanted=speed/3.6*h;const moved=advance(player,wanted);if(moved+1e-6<wanted)hit=true;
+  if(hit&&hitCooldown===0){speed*=.45;hitCooldown=.45;shake=.3;beep(65,.22);}
+  for(const a of [...actors].sort((a,b)=>b.d-a.d)){
+   const target=a.i<3?48+a.i*5:13+a.i%5;
+   const blocked=all.some(b=>b!==a&&Math.abs(a.x-b.x)<W&&b.d>a.d&&b.d-a.d<L+12);
+   if(blocked){const lane=lanes.filter(x=>Math.abs(x-a.x)>2&&clearAt(a,x,a.d,1)).sort((x,y)=>Math.abs(x-a.x)-Math.abs(y-a.x))[0];if(lane!==undefined)a.goal=lane;}
+   if(a.goal!==undefined){const next=a.x+Math.sign(a.goal-a.x)*Math.min(Math.abs(a.goal-a.x),3*h);if(clearAt(a,next,a.d))a.x=next;if(Math.abs(a.goal-a.x)<.01)a.goal=undefined;}
+   a.v=Math.min(target,a.v+12*h);const m=advance(a,a.v*h);if(m+1e-6<a.v*h)a.v=m/h;
+   if(a.i>=3&&(a.d<player.d-45||a.d>player.d+680)){let d=player.d+350+a.i*18;while(!clearAt(a,a.x,d,2))d+=10;a.d=d;}
+   if(a.i<3&&a.d>=raceLength&&rivals[a.i].finish===null)rivals[a.i].finish=elapsed;
+  }
+ }
+ distance=player.d;car.position.x=player.x;car.rotation.y=0;car.rotation.z=0;
+ actors.forEach(a=>{a.mesh.position.set(a.x,0,distance-a.d);});
+ const move=distance-oldDistance;asphalt.offset.y-=move/4;
+ scenery.forEach(m=>{m.position.z+=move;if(m.position.z>35)m.position.z-=720});finishGate.position.z=distance-raceLength;
+ markings.forEach(m=>{m.position.z+=move;if(m.position.z>30)m.position.z-=1200});buildings.forEach(m=>{m.position.z+=move;if(m.position.z>50)m.position.z-=1260});
+ playerPlace=1+actors.slice(0,3).filter(a=>a.d>distance||rivals[a.i].finish!==null).length;
  document.getElementById('raceinfo').textContent='POSITION: '+playerPlace+' / 4 · '+elapsed.toFixed(1)+'s';document.querySelector('#progress i').style.width=Math.min(100,distance/raceLength*100)+'%';
- markings.forEach(m=>{m.position.z+=move;if(m.position.z>30)m.position.z-=1200});
- buildings.forEach(m=>{m.position.z+=move;if(m.position.z>50)m.position.z-=1260});
- traffic.forEach((t,i)=>{
- if(i<3)return;
- let next=t.position.z+move-(12+i%5)*dt;
- for(const o of [car,...traffic])if(o!==t&&Math.abs(o.position.x-t.position.x)<2.1&&o.position.z<t.position.z)next=Math.max(next,Math.min(t.position.z+move,o.position.z+5.2));
- t.position.z=next;
- if(t.position.z>35||t.position.z<-650){let z=-400-i*22;while(!laneClear(t,t.position.x,z,12))z-=13;t.position.z=z;}
- });
- for(const t of traffic){
- if(Math.abs(t.position.x-car.position.x)<1.95&&Math.abs(t.position.z-car.position.z)<4.8){
- const dz=t.position.z-car.position.z;const dx=car.position.x-t.position.x;
- if(Math.abs(dx)>.65){car.position.x=Math.max(-6.8,Math.min(6.8,t.position.x+Math.sign(dx)*2.02));}
- if(Math.abs(t.position.x-car.position.x)<1.95){t.position.z=car.position.z+(dz<=0?-5.25:5.25);const r=rivals.find(r=>r.mesh===t);if(r)r.distance=distance-t.position.z;}
- if(hitCooldown===0){speed*=.48;hitCooldown=.65;shake=.32;beep(65,.22);}
- }
- }
- // Resolve AI-to-AI overlap, preserving the leading vehicle.
- for(let pass=0;pass<3;pass++)for(let i=0;i<traffic.length;i++)for(let j=i+1;j<traffic.length;j++){
- const a=traffic[i],b=traffic[j];if(Math.abs(a.position.x-b.position.x)<2.05&&Math.abs(a.position.z-b.position.z)<5.2){const rear=a.position.z>b.position.z?a:b;const front=rear===a?b:a;rear.position.z=front.position.z+5.25;const r=rivals.find(r=>r.mesh===rear);if(r)r.distance=distance-rear.position.z;}}
-
  if(running&&distance>=raceLength)endRace(playerPlace===1?'VICTORY!':'RACE COMPLETE');
  document.getElementById('speed').textContent=Math.round(speed);
  document.getElementById('score').textContent='Distance: '+Math.floor(distance)+' m';
@@ -247,14 +238,14 @@ sun.intensity = 1.5;
 
 function roadTexture(){
  const c = document.createElement('canvas');
- c.width = c.height = 1024;
+ c.width = c.height = 2048;
  const ctx = c.getContext('2d');
  ctx.fillStyle = '#34363a';
- ctx.fillRect(0,0,1024,1024);
- for(let i=0;i<180000;i++){
+ ctx.fillRect(0,0,2048,2048);
+ for(let i=0;i<650000;i++){
  const v = 35 + Math.floor(Math.random()*65);
  ctx.fillStyle = `rgb(${v},${v},${v})`;
- ctx.fillRect(Math.random()*1024,Math.random()*1024,2,2);
+ ctx.fillRect(Math.random()*2048,Math.random()*2048,2,2);
  }
  const t = new THREE.CanvasTexture(c);
  t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -269,7 +260,7 @@ const asphalt = roadTexture();
 scene.traverse(o=>{
  if(o.isMesh && o.geometry.type === 'BoxGeometry'){
  const p = o.geometry.parameters;
- if(p.width===16 && p.depth===1600){
+ if(p.width===16 && p.depth===5200){
  o.material.map = asphalt;
  o.material.color.set(0xffffff);
  o.material.roughness = 1;
@@ -316,7 +307,7 @@ document.getElementById('speed').style.cssText =
 'font-size:58px;font-style:italic;color:#ffffff;font-weight:900';
 
 // THARO RACING V4 - CAR UPGRADE
-document.title = 'THARO RACING 3D V6';
+document.title = 'THARO RACING 3D V7';
 
 while(car.children.length){
  car.remove(car.children[0]);
@@ -468,6 +459,7 @@ new THREE.MeshBasicMaterial({
 
 carShadow.rotation.x=-Math.PI/2;
 const loader = new THREE.GLTFLoader();
+const startButton=document.querySelector("#start button");startButton.disabled=true;startButton.textContent="LOADING ORIGINAL CAR…";
 
 loader.load('./drag-coupe.glb', function(gltf) {
     const model = gltf.scene;
@@ -481,7 +473,7 @@ loader.load('./drag-coupe.glb', function(gltf) {
         }
     });
 
-    car.add(model);
+    car.add(model); model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
 
     // Reuse the same detailed geometry; tint body-like materials on opponent copies.
     const colors=[0xb52126,0xd7d9df,0x235cb8,0x70737a,0xd69729];
@@ -490,20 +482,23 @@ loader.load('./drag-coupe.glb', function(gltf) {
       copy.traverse(o=>{if(!o.isMesh)return;const tint=m=>{const c=m.clone();if(c.color&&c.metalness>.35&&!/glass|wheel|tire|tyre|rim|chrome|light|rubber/i.test(c.name||'')){c.color.set(colors[i%colors.length]);}return c;};o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material);});
       t.children.forEach(o=>o.visible=false);t.add(copy);
     });
-    console.log('Black car loaded');
+    startButton.disabled=false;startButton.textContent='START RACING';console.log('Black car loaded');
 }, undefined, function(error) {
     console.error("Black car model failed to load",error);
- document.getElementById("score").textContent="Car model unavailable";
+ document.getElementById("score").textContent="Car model unavailable"; startButton.textContent="MODEL LOAD FAILED — RELOAD";
 });
 
-scene.background=new THREE.Color(0xc28e83);scene.fog=new THREE.FogExp2(0xc28e83,.006);sun.color.set(0xffbb83);sun.position.set(-55,22,-60);
+scene.background=new THREE.Color(0x91b8db);scene.fog=new THREE.FogExp2(0x91b8db,.004);sun.color.set(0xffe3bd);sun.position.set(-12,22,10);
 const scenery=[];const poleMat=new THREE.MeshStandardMaterial({color:0x34373b});const leafMat=new THREE.MeshStandardMaterial({color:0x344f36});const trunkMat=new THREE.MeshStandardMaterial({color:0x59402d});const lampMat=new THREE.MeshBasicMaterial({color:0xffe1a0});
 function part(g,geo,mat,x,y,z){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);g.add(m);return m;}
 for(let i=0;i<30;i++){for(const side of [-1,1]){const g=new THREE.Group();g.position.set(side*9.6,0,-i*24);scene.add(g);scenery.push(g);part(g,new THREE.CylinderGeometry(.065,.10,5.5,8),poleMat,0,2.75,0);part(g,new THREE.BoxGeometry(1.2,.09,.12),poleMat,-side*.55,5.5,0);part(g,new THREE.BoxGeometry(.65,.10,.31),lampMat,-side*1.1,5.42,0);const t=new THREE.Group();t.position.set(side*12,0,-i*24-12);scene.add(t);scenery.push(t);part(t,new THREE.CylinderGeometry(.13,.23,2.1,7),trunkMat,0,1.05,0);part(t,new THREE.IcosahedronGeometry(1.35,1),leafMat,0,2.8,0);}}
-for(const side of [-1,1]){box(2.6,.18,1600,0x65626a,side*9.4,.04,-400);box(.18,.28,1600,0xb9b4ac,side*8.1,.12,-400);}
+for(const side of [-1,1]){box(2.6,.18,5200,0x65626a,side*9.4,.04,-2200);box(.18,.28,5200,0xb9b4ac,side*8.1,.12,-2200);}
 buildings.forEach((b,i)=>{b.material.color.set([0xb6b2b7,0xa9bbc6,0x969096,0xc5b4a8][i%4]);b.scale.x=.7+(i%5)*.16;});
 const finishGate=new THREE.Group();scene.add(finishGate);for(const x of [-8.5,8.5])box(.35,6,.35,0x27272c,x,3,0,finishGate);box(17,.85,.3,0x22252b,0,6,0,finishGate);for(let i=0;i<24;i++)for(let j=0;j<2;j++)box(.65,.35,.02,(i+j)%2?0xffffff:0x111111,-7.5+i*.65,5.8+j*.35,.17,finishGate);finishGate.position.z=-raceLength;
-// Keep downloaded car model and fallback, as in original.
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-24,right:24,top:35,bottom:-35,near:1,far:100});sun.shadow.bias=-.0004;sun.shadow.normalBias=.035;
+scene.traverse(o=>{if(o.isMesh){o.receiveShadow=true;if(o.geometry.parameters?.height>1)o.castShadow=true;}});
+const sky=new THREE.Scene();const skyGeo=new THREE.SphereGeometry(30,32,16);const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,vertexShader:`varying vec3 v;void main(){v=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`varying vec3 v;void main(){float h=normalize(v).y;vec3 c=mix(vec3(.85,.91,.98),vec3(.18,.39,.68),smoothstep(0.,.9,h));if(h<0.)c=vec3(.23,.27,.28);gl_FragColor=vec4(c,1.);}`});sky.add(new THREE.Mesh(skyGeo,skyMat));const pmrem=new THREE.PMREMGenerator(renderer);scene.environment=pmrem.fromScene(sky,.08).texture;pmrem.dispose();
 animate();
 </script>
 </body>
