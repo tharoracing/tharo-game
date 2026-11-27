@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>THARO RACING 3D V7.1</title>
+<title>THARO RACING 3D V7.2</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial;touch-action:none}
@@ -196,10 +196,19 @@ function animate(){
   if(hit&&hitCooldown===0){speed*=.45;hitCooldown=.45;shake=.3;beep(65,.22);}
   for(const a of [...actors].sort((a,b)=>b.d-a.d)){
    const target=a.i<3?48+a.i*5:13+a.i%5;
-   const blocked=all.some(b=>b!==a&&Math.abs(a.x-b.x)<W&&b.d>a.d&&b.d-a.d<L+12);
-   if(blocked){const lane=lanes.filter(x=>Math.abs(x-a.x)>2&&clearAt(a,x,a.d,1)).sort((x,y)=>Math.abs(x-a.x)-Math.abs(y-a.x))[0];if(lane!==undefined)a.goal=lane;}
-   if(a.goal!==undefined){const next=a.x+Math.sign(a.goal-a.x)*Math.min(Math.abs(a.goal-a.x),3*h);if(clearAt(a,next,a.d))a.x=next;if(Math.abs(a.goal-a.x)<.01)a.goal=undefined;}
-   a.v=Math.min(target,a.v+12*h);const m=advance(a,a.v*h);if(m+1e-6<a.v*h)a.v=m/h;
+   // Anticipate slower vehicles and choose only the adjacent, reachable lane.
+   const ahead=all.filter(b=>b!==a&&Math.abs(a.x-b.x)<W&&b.d>a.d).sort((b,c)=>b.d-c.d)[0];
+   const gap=ahead?ahead.d-a.d-L:Infinity;
+   const leadSpeed=ahead===player||ahead===undefined? (ahead===player?speed/3.6:target):ahead.v;
+   if(a.goal===undefined&&gap<Math.max(18,a.v*1.1)&&leadSpeed<target-1){
+    const nearest=lanes.reduce((best,x)=>Math.abs(x-a.x)<Math.abs(best-a.x)?x:best,lanes[0]);
+    const options=lanes.filter(x=>Math.abs(x-nearest)===4&&all.every(b=>b===a||Math.abs(x-b.x)>=W+.35||b.d-a.d> L+Math.max(10,a.v*.5)||a.d-b.d>L+10));
+    if(options.length)a.goal=options.sort((x,y)=>Math.abs(x)-Math.abs(y))[0];
+   }
+   if(a.goal!==undefined){const next=a.x+Math.sign(a.goal-a.x)*Math.min(Math.abs(a.goal-a.x),5.5*h);if(clearAt(a,next,a.d))a.x=next;if(Math.abs(a.goal-a.x)<.01)a.goal=undefined;}
+   const desired=gap<10?Math.min(target,Math.max(0,leadSpeed+gap*.8)):target;
+   a.v=Math.max(0,Math.min(target,a.v+Math.max(-18*h,Math.min(12*h,desired-a.v))));
+   const m=advance(a,a.v*h);if(m+1e-6<a.v*h)a.v=m/h;
    if(a.i>=3&&(a.d<player.d-45||a.d>player.d+680)){let d=player.d+350+a.i*18;while(!clearAt(a,a.x,d,2))d+=10;a.d=d;}
    if(a.i<3&&a.d>=raceLength&&rivals[a.i].finish===null)rivals[a.i].finish=elapsed;
   }
@@ -307,7 +316,7 @@ document.getElementById('speed').style.cssText =
 'font-size:58px;font-style:italic;color:#ffffff;font-weight:900';
 
 // THARO RACING V4 - CAR UPGRADE
-document.title = 'THARO RACING 3D V7.1';
+document.title = 'THARO RACING 3D V7.2';
 
 while(car.children.length){
  car.remove(car.children[0]);
