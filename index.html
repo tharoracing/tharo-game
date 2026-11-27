@@ -166,7 +166,7 @@ for(const [id,key] of Object.entries({
  b.onpointerup=b.onpointercancel=b.onlostpointercapture=()=>keys[key]=false;
 }
 
-const lanes=[-6,-2,2,6], W=2.65,L=6.1;
+const lanes=[-6,-2,2,6], W=2.1,L=4.5;
 const actors=traffic.map((mesh,i)=>({mesh,x:mesh.position.x,d:45+i*33,v:0,i}));
 const player={mesh:car,x:0,d:0,v:0};
 const all=[player,...actors];
